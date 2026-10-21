@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import "./App.css";
 
-const API = "http://localhost:5000/api/books";
+const API = "https://mern-bookstore-c74e.onrender.com/api/books";
 
 function App() {
   const [books, setBooks] = useState([]);
@@ -13,88 +13,100 @@ function App() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
-  // Fetch books from MongoDB
-  async function fetchBooks() {
+  // Fetch all books
+  const fetchBooks = async () => {
     try {
       setError("");
 
       const response = await fetch(API);
 
       if (!response.ok) {
-        throw new Error("Failed to fetch books");
+        throw new Error("Failed to load books");
       }
 
       const data = await response.json();
       setBooks(data);
     } catch (err) {
-      setError(err.message || "Unable to load books");
+      console.error("Fetch books error:", err);
+      setError(
+        "Could not connect to the BookStore server. Please try again."
+      );
     } finally {
       setLoading(false);
     }
-  }
+  };
 
+  // Load books when the page opens
   useEffect(() => {
     fetchBooks();
   }, []);
 
   // Add or update a book
-  async function handleSubmit(event) {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
     setMessage("");
 
-    try {
-      const isEditing = editingId !== null;
+    if (!title.trim() || !author.trim()) {
+      setError("Please enter both the book title and author.");
+      return;
+    }
 
-      const response = await fetch(
-        isEditing ? `${API}/${editingId}` : API,
-        {
-          method: isEditing ? "PUT" : "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ title, author }),
-        }
-      );
+    const isEditing = editingId !== null;
+    const url = isEditing ? `${API}/${editingId}` : API;
+    const method = isEditing ? "PUT" : "POST";
+
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title: title.trim(),
+          author: author.trim(),
+        }),
+      });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || "Request failed");
-      }
-
-      if (isEditing) {
-        setBooks((currentBooks) =>
-          currentBooks.map((book) =>
-            book._id === editingId ? data : book
-          )
-        );
-        setMessage("Book updated successfully!");
-      } else {
-        setBooks((currentBooks) => [...currentBooks, data]);
-        setMessage("Book added successfully!");
+        throw new Error(data.message || "Unable to save book");
       }
 
       setTitle("");
       setAuthor("");
       setEditingId(null);
-    } catch (err) {
-      setError(err.message || "Something went wrong");
-    }
-  }
+      setMessage(isEditing ? "Book updated successfully!" : "Book added successfully!");
 
-  // Load book details into the form
-  function handleEdit(book) {
-    setEditingId(book._id);
+      await fetchBooks();
+    } catch (err) {
+      console.error("Save book error:", err);
+      setError(err.message || "Failed to save book. Please try again.");
+    }
+  };
+
+  // Start editing a book
+  const handleEdit = (book) => {
     setTitle(book.title);
     setAuthor(book.author);
-    setMessage("");
+    setEditingId(book._id);
     setError("");
+    setMessage("");
     window.scrollTo({ top: 0, behavior: "smooth" });
-  }
+  };
+
+  // Cancel editing
+  const handleCancel = () => {
+    setTitle("");
+    setAuthor("");
+    setEditingId(null);
+    setError("");
+    setMessage("");
+  };
 
   // Delete a book
-  async function handleDelete(id) {
+  const handleDelete = async (id) => {
     const confirmed = window.confirm(
       "Are you sure you want to delete this book?"
     );
@@ -112,103 +124,100 @@ function App() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || "Failed to delete book");
+        throw new Error(data.message || "Unable to delete book");
       }
 
-      setBooks((currentBooks) =>
-        currentBooks.filter((book) => book._id !== id)
-      );
-
       if (editingId === id) {
-        cancelEdit();
+        handleCancel();
       }
 
       setMessage("Book deleted successfully!");
+      await fetchBooks();
     } catch (err) {
-      setError(err.message || "Unable to delete book");
+      console.error("Delete book error:", err);
+      setError(err.message || "Failed to delete book. Please try again.");
     }
-  }
-
-  // Cancel editing
-  function cancelEdit() {
-    setEditingId(null);
-    setTitle("");
-    setAuthor("");
-    setError("");
-    setMessage("");
-  }
+  };
 
   return (
-    <div className="container">
+    <main className="container">
       <h1>My BookStore 📚</h1>
 
-      <div className="form-card">
+      <section className="form-section">
         <h2>{editingId ? "Edit Book" : "Add a Book"}</h2>
 
         <form onSubmit={handleSubmit}>
-          <input
-            type="text"
-            placeholder="Book title"
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            required
-          />
+          <div>
+            <label htmlFor="title">Book Title</label>
+            <input
+              id="title"
+              type="text"
+              placeholder="Enter book title"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              required
+            />
+          </div>
 
-          <input
-            type="text"
-            placeholder="Author name"
-            value={author}
-            onChange={(event) => setAuthor(event.target.value)}
-            required
-          />
+          <div>
+            <label htmlFor="author">Author</label>
+            <input
+              id="author"
+              type="text"
+              placeholder="Enter author name"
+              value={author}
+              onChange={(event) => setAuthor(event.target.value)}
+              required
+            />
+          </div>
 
           <button type="submit">
-            {editingId ? "Save Changes" : "Add Book"}
+            {editingId ? "Update Book" : "Add Book"}
           </button>
 
           {editingId && (
-            <button type="button" onClick={cancelEdit}>
+            <button type="button" onClick={handleCancel}>
               Cancel
             </button>
           )}
         </form>
-      </div>
 
-      {message && <p>{message}</p>}
-      {error && <p role="alert">{error}</p>}
+        {error && <p role="alert" className="error">{error}</p>}
+        {message && <p className="success">{message}</p>}
+      </section>
 
-      <h2>Available Books</h2>
+      <section className="books-section">
+        <h2>Available Books</h2>
 
-      {loading ? (
-        <p>Loading books...</p>
-      ) : books.length === 0 ? (
-        <p>No books yet. Add your first book!</p>
-      ) : (
-        <div className="book-list">
-          {books.map((book) => (
-            <div key={book._id} className="book-card">
-              <h3>{book.title}</h3>
-              <p>Author: {book.author}</p>
+        {loading ? (
+          <p>Loading books...</p>
+        ) : error && books.length === 0 ? (
+          <p>Books could not be loaded. Check the error above.</p>
+        ) : books.length === 0 ? (
+          <p>No books yet. Add your first book!</p>
+        ) : (
+          <div className="book-list">
+            {books.map((book) => (
+              <article className="book-card" key={book._id}>
+                <h3>{book.title}</h3>
+                <p>Author: {book.author}</p>
 
-              <button
-                type="button"
-                onClick={() => handleEdit(book)}
-              >
-                Edit
-              </button>
+                <button type="button" onClick={() => handleEdit(book)}>
+                  Edit
+                </button>
 
-              <button
-                type="button"
-                className="delete-btn"
-                onClick={() => handleDelete(book._id)}
-              >
-                Delete
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(book._id)}
+                >
+                  Delete
+                </button>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+    </main>
   );
 }
 
